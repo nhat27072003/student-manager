@@ -1,25 +1,29 @@
 package vn.edu.hust.studentman
 
+import android.content.Intent
 import android.os.Bundle
-import android.widget.Button
-import android.widget.EditText
-import androidx.activity.enableEdgeToEdge
-import androidx.appcompat.app.AlertDialog
+import android.view.ContextMenu
+import android.view.Menu
+import android.view.MenuItem
+import android.view.View
+import android.widget.AdapterView
+import android.widget.ListView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.snackbar.Snackbar
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var studentAdapter: StudentAdapter
+    private lateinit var listView: ListView
+    private lateinit var adapter: StudentAdapter
+    private lateinit var students: MutableList<StudentModel>
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        val toolbar: androidx.appcompat.widget.Toolbar = findViewById(R.id.toolbar)
+        setSupportActionBar(toolbar)
 
-        val students = mutableListOf(
+         students = mutableListOf(
             StudentModel("Nguyễn Văn An", "SV001"),
             StudentModel("Trần Thị Bảo", "SV002"),
             StudentModel("Lê Hoàng Cường", "SV003"),
@@ -42,112 +46,88 @@ class MainActivity : AppCompatActivity() {
             StudentModel("Lê Văn Vũ", "SV020")
         )
 
-        fun showUndoSnackbar(removedStudent: StudentModel, position: Int) {
-            val snackbar = Snackbar.make(
-                findViewById(R.id.recycler_view_students),
-                "${removedStudent.studentName} đã bị xóa",
-                Snackbar.LENGTH_LONG
-            )
-            snackbar.setAction("Undo") {
-                students.add(position, removedStudent)
-                studentAdapter.notifyItemInserted(position)
-            }
-            snackbar.show()
+        listView = findViewById(R.id.list_view)
+        adapter = StudentAdapter(this, students)
+        listView.adapter=adapter
+
+        registerForContextMenu(listView)
+
+        listView.setOnItemClickListener { _, _, position, _ ->
+            val student = students[position]
+
+            val intent = Intent(this, StudentActivity::class.java)
+            intent.putExtra("STUDENT_NAME", student.studentName)
+            intent.putExtra("STUDENT_CODE", student.studentId)
+            startActivity(intent)
         }
-
-        fun showAddStudentDialog(onAdd: (StudentModel) -> Unit) {
-            val dialogView = layoutInflater.inflate(R.layout.dialog_edit, null)
-            val editName = dialogView.findViewById<EditText>(R.id.edtName)
-            val editId = dialogView.findViewById<EditText>(R.id.edtId)
-
-            AlertDialog.Builder(this)
-                .setTitle("Thêm mới sinh viên")
-                .setView(dialogView)
-                .setPositiveButton("Thêm") { _, _ ->
-                    val newStudent = StudentModel(
-                        studentName = editName.text.toString(),
-                        studentId = editId.text.toString()
-                    )
-                    onAdd(newStudent)
-                }
-                .setNegativeButton("Hủy", null)
-                .show()
-        }
-
-        fun showDeleteConfirmationDialog(
-            student: StudentModel,
-            onConfirm: (Boolean) -> Unit
-        ) {
-            AlertDialog.Builder(this)
-                .setTitle("Xóa sinh viên")
-                .setMessage("Bạn có muốn xóa sinh viên ${student.studentName}?")
-                .setPositiveButton("Có") { _, _ -> onConfirm(true) }
-                .setNegativeButton("Không") { _, _ -> onConfirm(false) }
-                .show()
-        }
-
-
-        fun showEditStudentDialog(
-            student: StudentModel,
-            onSave: (StudentModel) -> Unit
-        ) {
-            val dialogView = layoutInflater.inflate(R.layout.dialog_edit, null)
-            val editName = dialogView.findViewById<EditText>(R.id.edtName)
-            val editId = dialogView.findViewById<EditText>(R.id.edtId)
-
-            editName.setText(student.studentName)
-            editId.setText(student.studentId)
-
-            AlertDialog.Builder(this)
-                .setTitle("Cập nhật sinh viên")
-                .setView(dialogView)
-                .setPositiveButton("Lưu") { _, _ ->
-                    val updatedStudent = StudentModel(
-                        studentName = editName.text.toString(),
-                        studentId = editId.text.toString()
-                    )
-                    onSave(updatedStudent)
-                }
-                .setNegativeButton("Hủy", null)
-                .show()
-        }
-
-        studentAdapter = StudentAdapter(
-            students,
-            onEditClick = { student ->
-                showEditStudentDialog(student) { updatedStudent ->
-                    val index = students.indexOfFirst { it.studentId == student.studentId }
-                    if (index != -1) {
-                        students[index] = updatedStudent
-                        studentAdapter.notifyItemChanged(index)
-                    }
-                }
-            },
-            onRemoveClick = { student ->
-                showDeleteConfirmationDialog(student) { confirmed ->
-                    if (confirmed) {
-                        val index = students.indexOfFirst { it.studentId == student.studentId }
-                        if (index != -1) {
-                            val removedStudent = students.removeAt(index)
-                            studentAdapter.notifyItemChanged(index)
-                            showUndoSnackbar(removedStudent, index)
-                        }
-                    }
-                }
-            }
-        )
-
-        findViewById<RecyclerView>(R.id.recycler_view_students).run {
-            adapter = studentAdapter
-            layoutManager = LinearLayoutManager(this@MainActivity)
-        }
-        findViewById<Button>(R.id.btn_add_new).setOnClickListener {
-            showAddStudentDialog { newStudent ->
-                students.add(newStudent)
-                studentAdapter.notifyItemInserted(students.size - 1)
-            }
-        }
-
     }
+
+    override fun onCreateContextMenu(
+        menu: ContextMenu?,
+        v: View?,
+        menuInfo: ContextMenu.ContextMenuInfo?
+    ) {
+        super.onCreateContextMenu(menu, v, menuInfo)
+        menuInflater.inflate(R.menu.student_context, menu)
+    }
+
+    override fun onContextItemSelected(item: MenuItem): Boolean {
+        val info = item.menuInfo as AdapterView.AdapterContextMenuInfo
+        val studentName = students[info.position]
+
+        return when (item.itemId) {
+            R.id.menu_edit -> {
+                val intent = Intent(this, StudentActivity::class.java)
+                intent.putExtra("student_name", students[0].studentName)
+                intent.putExtra("student_id", students[0].studentId)
+                startActivity(intent)
+                true
+            }
+            R.id.menu_delete -> {
+                students.removeAt(info.position)
+                adapter.notifyDataSetChanged()
+                Toast.makeText(this, "Đã xóa: ${studentName.studentName}", Toast.LENGTH_SHORT).show()
+                true
+            }
+            else -> super.onContextItemSelected(item)
+        }
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
+    }
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.add_new -> {
+                val intent = Intent(this, StudentActivity::class.java)
+                startActivity(intent)
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+    @Deprecated("This method has been deprecated in favor of using the Activity Result API\n      which brings increased type safety via an {@link ActivityResultContract} and the prebuilt\n      contracts for common intents available in\n      {@link androidx.activity.result.contract.ActivityResultContracts}, provides hooks for\n      testing, and allow receiving results in separate, testable classes independent from your\n      activity. Use\n      {@link #registerForActivityResult(ActivityResultContract, ActivityResultCallback)}\n      with the appropriate {@link ActivityResultContract} and handling the result in the\n      {@link ActivityResultCallback#onActivityResult(Object) callback}.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == 1 && resultCode == RESULT_OK) {
+            val updatedName = data?.getStringExtra("UPDATED_NAME")
+            val updatedCode = data?.getStringExtra("UPDATED_CODE")
+
+            if (!updatedName.isNullOrEmpty() && !updatedCode.isNullOrEmpty()) {
+                val position = data?.getIntExtra("STUDENT_POSITION", -1) ?: -1
+                if (position >= 0) {
+                    students[position].studentName = updatedName
+                    students[position].studentId = updatedCode
+
+                    adapter.notifyDataSetChanged()
+
+                    Toast.makeText(this, "Thông tin sinh viên đã được cập nhật", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
 
 }
